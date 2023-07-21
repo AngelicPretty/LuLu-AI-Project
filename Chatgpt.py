@@ -8,7 +8,7 @@ import openai
 #os.environ["HTTP_PROXY"] = "127.0.0.1:1089"
 #os.environ["HTTPS_PROXY"] = "127.0.0.1:8889"
 # 设置OpenAI API密钥和端点URL
-openai.api_key = 'sk-lQJ1P17Hwrzcu3DOD4Da04034267424a94B818AeFb5f2fFf'
+openai.api_key = '{openai-key}'
 openai.api_base = "https://openkey.cloud/v1/chat/completions"
 url = "https://openkey.cloud/v1/chat/completions"
 # 定义用于向API发送请求并获取响应的函数
