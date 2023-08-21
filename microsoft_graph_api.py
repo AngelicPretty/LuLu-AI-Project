@@ -351,7 +351,6 @@ def clear_all_methods(user_bearer, user_id):
 		for item in auth_methods:
 			url = methtype_to_url(item["@odata.type"],user_id,item["id"])
 			if url != False and item["@odata.type"] != "#microsoft.graph.passwordAuthenticationMethod":
-				print(url)
 				resp = requests.delete(url, headers=get_headers(user_bearer))
 				print("[+] Status code: ", resp.status_code)
 				if resp.status_code == 204:
