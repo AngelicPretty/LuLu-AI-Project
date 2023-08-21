@@ -2,10 +2,12 @@
 # Licensed under the MIT License.
 
 import os
+import re
 import json
 import random
 import Chatgpt
 import vpn_user
+import email_check
 import lulu_bot_api
 
 from typing import List
@@ -36,15 +38,12 @@ class TeamsConversationBot(TeamsActivityHandler):
 			print("[+] Time: ", turn_context.activity.timestamp)
 			text = "image"
 
-		if "bot:" in text:
-			await self._chatgpt(turn_context, text)
-			return
 
-		if "搜索" in text:
+		if "search" in text:
 			await self._user_profiles(turn_context, text)
 			return
 
-		if "vpn:" in text:
+		if "vpn" in text:
 			await self._user_vpn(turn_context, text)
 			return
 
@@ -52,15 +51,11 @@ class TeamsConversationBot(TeamsActivityHandler):
 			await self._lulu_activity(turn_context)
 			return
 
-		if "chatgpt" in text:
-			await self._chatgpt_info(turn_context, text)
-			return
-
 		if "wifi" in text:
 			await self._wifi_card(turn_context)
 			return
 
-		if "重置" in text or "密码" in text:
+		if "reset" in text or "pass" in text:
 			await self._password_reset(turn_context, text)
 			return
 
@@ -92,6 +87,10 @@ class TeamsConversationBot(TeamsActivityHandler):
 			await self._image_reply(turn_context)
 			return
 
+		if "email" in text:
+			await self._verify_email(turn_context, text)
+			return
+
 		else:
 			await self._chatgpt(turn_context, text)
 			return
@@ -107,7 +106,7 @@ class TeamsConversationBot(TeamsActivityHandler):
 	async def _user_profiles(self, turn_context: TurnContext, message):
 		reply_activity = MessageFactory.text("正在搜索用户中！请稍等片刻...")
 		await turn_context.send_activity(reply_activity)
-		search_name = message[message.index("搜索") + 2:]
+		search_name = message[message.index("search:") + 7:]
 		json_resp = lulu_bot_api.user_profiles(search_name)
 		if json_resp is not None:
 			reply_activity = MessageFactory.text("LuLu已经成功搜索到！")
@@ -128,12 +127,6 @@ class TeamsConversationBot(TeamsActivityHandler):
 			reply_activity = MessageFactory.text("对不起,LuLu没有找到相关人员,请重新搜索")
 			await turn_context.send_activity(reply_activity)
 
-	async def _chatgpt_info(self, turn_context: TurnContext, message):
-		reply_activity = MessageFactory.text("LuLu正在接入ChatGpt中！请稍等片刻...")
-		await turn_context.send_activity(reply_activity)
-		reply_activity = MessageFactory.text("ChatGpt接入成功！请前面加上bot:对我进行对话...")
-		await turn_context.send_activity(reply_activity)
-
 	async def _chatgpt(self, turn_context: TurnContext, message):
 		reply = Chatgpt.send_chatgpt_message(message)
 		reply_activity = MessageFactory.text(reply)
@@ -142,7 +135,7 @@ class TeamsConversationBot(TeamsActivityHandler):
 	async def _password_reset(self, turn_context: TurnContext, message):
 		reply_activity = MessageFactory.text("正在重置密码中！请稍等片刻...")
 		await turn_context.send_activity(reply_activity)
-		user = message[message.index("密码") + 2:]
+		user = message[message.index("pass:") + 5:]
 		json_resp, user_name = lulu_bot_api.change_password(user)
 		if json_resp is not None:
 			tmpassword = json_resp["newPassword"]
@@ -280,3 +273,38 @@ class TeamsConversationBot(TeamsActivityHandler):
 			reply_activity = MessageFactory.text("抱歉,LuLu没有搜到~")
 			await turn_context.send_activity(reply_activity)
 			print("[+] Not found pass or user")
+
+	async def _verify_email(self, turn_context: TurnContext, message):
+		reply_activity = MessageFactory.text("LuLu正在验证邮箱地址的有效性！请稍等片刻...")
+		await turn_context.send_activity(reply_activity)
+		message = re.sub('<.*?>', '', message)
+		message = message[message.index("email:") + 6:]
+		reslut = email_check.syntax_check(message)
+		if reslut == True:
+			reply_activity = MessageFactory.text("The Email Address Syntax is correct")
+			await turn_context.send_activity(reply_activity)
+			domain = email_check.extract_email_domain(message)
+			mx_records = email_check.get_mx_records(domain)
+			reply_activity = MessageFactory.text(f"MX records for {domain}:")
+			await turn_context.send_activity(reply_activity)
+			for i in mx_records:
+				reply_activity = MessageFactory.text(f"MX preference =  {i.preference} mail exchnager = {str(i.exchange)[:-1]}")
+				await turn_context.send_activity(reply_activity)
+			mx_result = email_check.mx_connection(str(mx_records[0].exchange)[:-1])
+			if mx_result == True:
+				reply_activity = MessageFactory.text("MX Connection succeeded")
+				await turn_context.send_activity(reply_activity)
+				smtp_result = email_check.smtp_connection(message, str(mx_records[0].exchange)[:-1])
+				if smtp_result == True:
+					reply_activity = MessageFactory.text("SMTP server connection succeeded")
+					await turn_context.send_activity(reply_activity)
+				else:
+					reply_activity = MessageFactory.text("SMTP server connection failed")
+					await turn_context.send_activity(reply_activity)
+					reply_activity = MessageFactory.text("The email adress seems not to be valid")
+					await turn_context.send_activity(reply_activity)
+			else:
+				reply_activity = MessageFactory.text("MX connection failed")
+				await turn_context.send_activity(reply_activity)
+				reply_activity = MessageFactory.text("The email address seems not to be valid")
+				await turn_context.send_activity(reply_activity)
